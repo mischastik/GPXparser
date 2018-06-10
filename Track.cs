@@ -57,7 +57,6 @@ namespace GPXparser
         #region Private Fields
         private TrackStatistics statisics;
         private double motionSpeedThreshold = 1.7;
-        private static GeodeticCalculator geoCal = new GeodeticCalculator();
         #endregion
 
         #region Public Properties
@@ -133,6 +132,42 @@ namespace GPXparser
         {
             this.statisics = null;
         }
+        /// <summary>
+        /// Split a track at all jumps where the distance between two waypoints exceeds a threshold.
+        /// </summary>
+        /// <param name="distanceThreshold">Distance threshold in </param>
+        /// <returns>Splitted tracks.</returns>
+        /// <remarks>Track names are preserved and a running number is appended.</remarks>
+        public List<Track> SplitAtDistanceJumps(double distanceThreshold)
+        {
+            List<Track> splitTracks = new List<Track>();
+            Track currentTrack = new Track();
+            splitTracks.Add(currentTrack);
+            currentTrack.Name = this.Name + "_" + splitTracks.Count;
+            // go though points and start a new track if distance treashold is exceeded.
+            for (int i = 0; i < Waypoints.Count - 1; i++)
+            {
+                currentTrack.Waypoints.Add(Waypoints[i]);
+                double distance = Waypoint.ComputeDistance(Waypoints[i], Waypoints[i + 1], out double elevationChange);
+                if (distanceThreshold < distance)
+                {
+                    currentTrack = new Track();
+                    splitTracks.Add(currentTrack);
+                    currentTrack.Name = this.Name + "_" + splitTracks.Count;
+                }
+            }
+            // take care of last point
+            double lastDistance = Waypoint.ComputeDistance(Waypoints[Waypoints.Count - 2], Waypoints[Waypoints.Count - 1], out double lastElevationChange);
+            if (lastDistance > distanceThreshold)
+            {
+                currentTrack = new Track();
+                splitTracks.Add(currentTrack);
+                currentTrack.Name = this.Name + "_" + splitTracks.Count;
+            }
+            currentTrack.Waypoints.Add(Waypoints[Waypoints.Count - 1]);
+
+            return splitTracks;
+        }
         #endregion
 
         #region Private Methods
@@ -143,14 +178,7 @@ namespace GPXparser
             {
                 Waypoint w1 = Waypoints[i];
                 Waypoint w2 = Waypoints[i + 1];
-                GlobalCoordinates startCoords = new GlobalCoordinates(w1.Latitude, w1.Longitude);
-                GlobalCoordinates endCoords = new GlobalCoordinates(w2.Latitude, w2.Longitude);
-                GeodeticCurve curve = geoCal.CalculateGeodeticCurve(Ellipsoid.WGS84, startCoords, endCoords);
-                double elevationChange = 0;
-                if (!double.IsNaN(w1.Elevation) && !double.IsNaN(w2.Elevation))
-                {
-                    elevationChange = w2.Elevation - w1.Elevation;
-                }
+                double distance = Waypoint.ComputeDistance(w1, w2, out double elevationChange);
                 if (elevationChange < 0)
                 {
                     trackStatistics.AbsoluteDescent -= elevationChange;
@@ -159,8 +187,6 @@ namespace GPXparser
                 {
                     trackStatistics.AbsoluteClimb += elevationChange;
                 }
-                GeodeticMeasurement measurement = new GeodeticMeasurement(curve, elevationChange);
-                double distance = measurement.PointToPointDistance;
                 TimeSpan timeBetween = w2.Time - w1.Time;
                 w1.Speed = distance / (1000.0 * timeBetween.TotalHours);
                 if (w1.Speed > motionSpeedThreshold)
