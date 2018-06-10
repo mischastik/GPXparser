@@ -8,28 +8,75 @@ using System.Xml;
 
 namespace GPXparser
 {
+    /// <summary>
+    /// Represents a GPS-track or -route.
+    /// </summary>
     public class Track
     {
-        private TrackStatistics statisics;
-        private double motionSpeedThreshold = 1.7;
+        #region Types
+        /// <summary>
+        /// Holds all kinds of statistics of a track.
+        /// </summary>
         public class TrackStatistics
         {
+            /// <summary>
+            /// Amount of time where a speed threshold between waypoints is exceeded.
+            /// </summary>
             public TimeSpan TimeInMotion { get; set; }
+            /// <summary>
+            /// Average speed of the track parts with motion.
+            /// </summary>
             public double AverageSpeedInMotion { get; set; }
+            /// <summary>
+            /// Total average speed including breaks.
+            /// </summary>
             public double AverageSpeed { get; set; }
+            /// <summary>
+            /// Track length in km.
+            /// </summary>
             public double Length { get; set; }
+            /// <summary>
+            /// Total meters climbed.
+            /// </summary>
             public double AbsoluteClimb { get; set; }
+            /// <summary>
+            /// Total meters decended.
+            /// </summary>
             public double AbsoluteDescent { get; set; }
+            /// <summary>
+            /// Produces a string summarizing the track statistics.
+            /// </summary>
+            /// <returns>String summary.</returns>
             public override string ToString()
             {
                 return $"{Length:0.00} km at avg. speed of {AverageSpeed:0.00} km/h ({AverageSpeedInMotion:0.00} km/h in motion), {AbsoluteClimb:0.0} m up and {AbsoluteDescent:0.0} m down.";
             }
         }
-        public static GeodeticCalculator geoCal = new GeodeticCalculator();
+        #endregion
 
+        #region Private Fields
+        private TrackStatistics statisics;
+        private double motionSpeedThreshold = 1.7;
+        private static GeodeticCalculator geoCal = new GeodeticCalculator();
+        #endregion
+
+        #region Public Properties
+        /// <summary>
+        /// All waypoints of the track.
+        /// </summary>
         public List<Waypoint> Waypoints { get; set; } = new List<Waypoint>();
+        /// <summary>
+        /// True if object represents a route, false if it represents a track.
+        /// </summary>
         public bool IsRoute { get; set; }
+        /// <summary>
+        /// Name of the track.
+        /// </summary>
         public string Name { get; set; }
+        /// <summary>
+        /// Track statistics.
+        /// </summary>
+        /// <remarks>Statistics are computed when the property is called for the first time. Needs to be reset if waypoints are changed.</remarks>
         public TrackStatistics Statistics
         {
             get
@@ -41,7 +88,54 @@ namespace GPXparser
                 return statisics;
             }
         }
+        #endregion
 
+        #region Public Methods
+        /// <summary>
+        /// Reads the contents of a GPX-file.
+        /// </summary>
+        /// <param name="filename">Path to the GPX-file.</param>
+        /// <returns>List of all tracks and routes contained in the file.</returns>
+        /// <remarks>Supports only tracks and routes, everything else (e. g. single waypoints) is ignored and track-segments are joined into one track.</remarks>
+        public static List<Track> ReadTracksFromFile(string filename)
+        {
+            List<Track> tracks = new List<Track>();
+            using (XmlReader reader = XmlReader.Create(filename))
+            {
+                while (reader.Read())
+                {
+                    if (reader.IsStartElement())
+                    {
+                        if (reader.Name == "trk")
+                        {
+                            Track trk = new Track();
+                            trk.IsRoute = false;
+                            trk.Read(reader);
+                            tracks.Add(trk);
+                        }
+                        else if (reader.Name == "rte")
+                        {
+                            Track trk = new Track();
+                            trk.IsRoute = true;
+                            trk.Read(reader);
+                            tracks.Add(trk);
+                        }
+                        // ignore everything else for now, even metadata
+                    }
+                }
+            }
+            return tracks;
+        }
+        /// <summary>
+        /// If waypoints are altered manually, previously computed track statistics might become invalid and you need to call this method.
+        /// </summary>
+        public void ResetStatistics()
+        {
+            this.statisics = null;
+        }
+        #endregion
+
+        #region Private Methods
         private void ComputeStatistics()
         {
             TrackStatistics trackStatistics = new TrackStatistics();
@@ -82,36 +176,6 @@ namespace GPXparser
             statisics = trackStatistics;
         }
 
-        public static List<Track> ReadTracksFromFile(string filename)
-        {
-            List<Track> tracks = new List<Track>();
-            using (XmlReader reader = XmlReader.Create(filename))
-            {
-                while (reader.Read())
-                {
-                    if (reader.IsStartElement())
-                    {
-                        if (reader.Name == "trk")
-                        {
-                            Track trk = new Track();
-                            trk.IsRoute = false;
-                            trk.Read(reader);
-                            tracks.Add(trk);
-                        }
-                        else if (reader.Name == "rte")
-                        {
-                            Track trk = new Track();
-                            trk.IsRoute = true;
-                            trk.Read(reader);
-                            tracks.Add(trk);
-                        }
-                        // ignore everything else for now, even metadata
-                    }
-                }
-            }
-            return tracks;
-        }
-
         private void Read(XmlReader reader)
         {
             Waypoints.Clear();
@@ -137,5 +201,6 @@ namespace GPXparser
                 }
             }
         }
+        #endregion
     }
 }
