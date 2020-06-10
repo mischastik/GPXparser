@@ -73,6 +73,47 @@ namespace GPXparser
         /// </summary>
         public string Name { get; set; }
         /// <summary>
+        /// Minimum latitude value in track.
+        /// </summary>
+        public double MinLat
+        {
+            get
+            {
+                return Waypoints.Min(x => x.Latitude);
+            }
+        }
+        /// <summary>
+        /// Maximum latitude value in track.
+        /// </summary>
+        public double MaxLat
+        {
+            get
+            {
+                return Waypoints.Max(x => x.Latitude);
+            }
+        }
+        /// <summary>
+        /// Minimum longitude value in track.
+        /// </summary>
+        public double MinLon
+        {
+            get
+            {
+                return Waypoints.Min(x => x.Longitude);
+            }
+        }
+        /// <summary>
+        /// Maximum longitude value in track.
+        /// </summary>
+        public double MaxLon
+        {
+            get
+            {
+                return Waypoints.Max(x => x.Longitude);
+            }
+        }
+
+        /// <summary>
         /// Track statistics.
         /// </summary>
         /// <remarks>Statistics are computed when the property is called for the first time. Needs to be reset if waypoints are changed.</remarks>
