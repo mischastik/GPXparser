@@ -14,19 +14,60 @@ namespace RenderTrack
     {
         static void Main(string[] args)
         {
-            // create file email.txt
-            string email = File.ReadAllText(@"email.txt");
+            // create file email.txt with your e-mail adress
+            string email;
+            try
+            {
+                email = File.ReadAllText(@"email.txt");
+            } catch (Exception)
+            {
+                Console.WriteLine("Please create a file called \"email.txt\" that contains your e-mail adress. It is required for the Open Street Map API.");
+                return;
+            }
+            if (args.Length < 2 || args.Length > 3)
+            {
+                Console.WriteLine("Usage:");
+                Console.WriteLine(System.Reflection.Assembly.GetExecutingAssembly().GetName().Name + " [path to GPX file] [zoomlevel] {tile cache directory}");
+                return;
+            }
             int zoomLevel = int.Parse(args[1]);
             string gpxPath = args[0];
+            if (!File.Exists(gpxPath))
+            {
+                Console.WriteLine("Cannot find file " + gpxPath);
+                return;                
+            }
             string cacheDir = "";
+            if (zoomLevel < 0 || zoomLevel >= 20)
+            {
+                Console.WriteLine("Zoom level must be in [0;20].");
+                return;
+            }
             if (args.Length > 2)
             {
                 cacheDir = args[2];
-                if (!Directory.Exists(cacheDir))
-                    Directory.CreateDirectory(cacheDir);
+                try
+                {
+                    if (!Directory.Exists(cacheDir))
+                    {
+                        Directory.CreateDirectory(cacheDir);
+                    }
+                } catch (Exception)
+                {
+                    Console.WriteLine("Could not create cache directory " + args[2]);
+                    return;
+                }
             }
-
-            List<Track> tracks = Track.ReadTracksFromFile(gpxPath);
+            List<Track> tracks;
+            try
+            {
+                tracks = Track.ReadTracksFromFile(gpxPath);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Cannot read GPX file " + gpxPath + ": " + ex.Message);
+                return;
+            }
             double minLongitude = double.MaxValue;
             double maxLongitude = double.MinValue;
             double minLatitude = double.MaxValue;
@@ -50,7 +91,7 @@ namespace RenderTrack
             Tuple<int, int> minTile = Deg2num(maxLatitude, minLongitude, zoomLevel);
             Tuple<int, int> maxTile = Deg2num(minLatitude, maxLongitude, zoomLevel);
             Bitmap[,] bitmaps = new Bitmap[maxTile.Item2 - minTile.Item2 + 1, maxTile.Item1 - minTile.Item1 + 1];
-            // load bitmaps
+            // load bitmaps from cache or OSM API.
             for (int y = 0; y < bitmaps.GetLength(0); y++)
             {
                 for (int x = 0; x < bitmaps.GetLength(1); x++)
@@ -123,7 +164,7 @@ namespace RenderTrack
                     linePrev = line;
                 }
             }
-            fullBmp.Save("C:\\temp\\test.png");
+            fullBmp.Save(Path.Combine(Path.GetDirectoryName(gpxPath), Path.GetFileNameWithoutExtension(gpxPath) + zoomLevel.ToString("00") + ".png"));
         }
 
         static int LatToLine(int minTile, int tileHeight, double lat_deg, int zoom)
