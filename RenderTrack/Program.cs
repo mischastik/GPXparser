@@ -27,15 +27,32 @@ namespace RenderTrack
             if (args.Length < 2 || args.Length > 3)
             {
                 Console.WriteLine("Usage:");
-                Console.WriteLine(System.Reflection.Assembly.GetExecutingAssembly().GetName().Name + " [path to GPX file] [zoomlevel] {tile cache directory}");
+                Console.WriteLine(System.Reflection.Assembly.GetExecutingAssembly().GetName().Name + " [path to GPX file or folder] [zoomlevel] {tile cache directory}");
                 return;
             }
             int zoomLevel = int.Parse(args[1]);
-            string gpxPath = args[0];
-            if (!File.Exists(gpxPath))
+            List<string> gpxFilePaths = new List<string>();
             {
-                Console.WriteLine("Cannot find file " + gpxPath);
-                return;                
+                string gpxPath = args[0];
+                if (File.Exists(gpxPath))
+                {
+                    gpxFilePaths.Add(gpxPath);
+                }
+                else if (Directory.Exists(gpxPath))
+                {
+                    gpxFilePaths.AddRange(Directory.GetFiles(gpxPath));
+                }
+                else
+                {
+                    Console.WriteLine("Cannot find file or path " + gpxPath);
+                    return;
+                }
+
+                if (gpxFilePaths.Count == 0)
+                {
+                    Console.WriteLine("Cannot find a gpx file in " + gpxPath);
+                    return;
+                }
             }
             string cacheDir = "";
             if (zoomLevel < 0 || zoomLevel >= 20)
@@ -58,35 +75,41 @@ namespace RenderTrack
                     return;
                 }
             }
-            List<Track> tracks;
-            try
-            {
-                tracks = Track.ReadTracksFromFile(gpxPath);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine("Cannot read GPX file " + gpxPath + ": " + ex.Message);
-                return;
-            }
             double minLongitude = double.MaxValue;
             double maxLongitude = double.MinValue;
             double minLatitude = double.MaxValue;
             double maxLatitude = double.MinValue;
 
-            foreach (var track in tracks)
+            foreach (string gpxFile in gpxFilePaths)
             {
-                double minLon = track.MinLon;
-                double maxLon = track.MaxLon;
-                double minLat = track.MinLat;
-                double maxLat = track.MaxLat;
-                if (minLon < minLongitude)
-                    minLongitude = minLon;
-                if (maxLon > maxLongitude)
-                    maxLongitude = maxLon;
-                if (minLat < minLatitude)
-                    minLatitude = minLat;
-                if (maxLat > maxLatitude)
-                    maxLatitude = maxLat;
+                List<Track> tracks;
+                try
+                {
+                    tracks = Track.ReadTracksFromFile(gpxFile);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine("Cannot read GPX file " + gpxFile + ": " + ex.Message);
+                    continue;
+                }
+
+                foreach (Track track in tracks)
+                {
+                    if (track.Waypoints.Count == 0)
+                        continue;
+                    double minLon = track.MinLon;
+                    double maxLon = track.MaxLon;
+                    double minLat = track.MinLat;
+                    double maxLat = track.MaxLat;
+                    if (minLon < minLongitude)
+                        minLongitude = minLon;
+                    if (maxLon > maxLongitude)
+                        maxLongitude = maxLon;
+                    if (minLat < minLatitude)
+                        minLatitude = minLat;
+                    if (maxLat > maxLatitude)
+                        maxLatitude = maxLat;
+                }
             }
             Tuple<int, int> minTile = Deg2num(maxLatitude, minLongitude, zoomLevel);
             Tuple<int, int> maxTile = Deg2num(minLatitude, maxLongitude, zoomLevel);
@@ -144,27 +167,55 @@ namespace RenderTrack
             }
 
             // draw track
-            Pen redPen = new Pen(Color.Red, 3);
-            Pen yellowPen = new Pen(Color.Yellow, 1);
-            foreach (var track in tracks)
+            Pen redPen = new Pen(Color.FromArgb(63, Color.Red), 3);
+            Pen yellowPen = new Pen(Color.FromArgb(127, Color.Red), 1);
+            foreach (string gpxFile in gpxFilePaths)
             {
-                int colPrev = int.MaxValue;
-                int linePrev = int.MaxValue;
-                foreach (var waypoint in track.Waypoints)
+                List<Track> tracks;
+                try
                 {
-                    int line = LatToLine(minTile.Item2, tileHeight, waypoint.Latitude, zoomLevel);
-                    //line = fullBmp.Height - line;
-                    int col = (int)((waypoint.Longitude - lonStart) / lonIncrement);
-                    if (colPrev != int.MaxValue)
+                    tracks = Track.ReadTracksFromFile(gpxFile);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine("Cannot read GPX file " + gpxFile + ": " + ex.Message);
+                    continue;
+                }
+                for (int i = 0; i < tracks.Count; i++)
+                {
+                    Track track = tracks[i];
+                    if (track.Waypoints.Count == 0)
+                        continue;
+                    List<Track> tracksSplit = track.SplitAtDistanceJumps(1000);
+                    if (tracksSplit.Count > 1)
                     {
-                        graphics.DrawLine(redPen, colPrev, linePrev, col, line);
-                        graphics.DrawLine(yellowPen, colPrev, linePrev, col, line);
+                        track = tracksSplit[0];
+                        tracksSplit.RemoveAt(0);
+                        tracks.AddRange(tracksSplit);
                     }
-                    colPrev = col;
-                    linePrev = line;
+                    int colPrev = int.MaxValue;
+                    int linePrev = int.MaxValue;
+                    foreach (var waypoint in track.Waypoints)
+                    {
+                        int line = LatToLine(minTile.Item2, tileHeight, waypoint.Latitude, zoomLevel);
+                        //line = fullBmp.Height - line;
+                        int col = (int)((waypoint.Longitude - lonStart) / lonIncrement);
+                        if (colPrev != int.MaxValue)
+                        {
+                            graphics.DrawLine(redPen, colPrev, linePrev, col, line);
+                            graphics.DrawLine(yellowPen, colPrev, linePrev, col, line);
+                        }
+                        colPrev = col;
+                        linePrev = line;
+                    }
                 }
             }
-            fullBmp.Save(Path.Combine(Path.GetDirectoryName(gpxPath), Path.GetFileNameWithoutExtension(gpxPath) + zoomLevel.ToString("00") + ".png"));
+            string baseName = "tracks";
+            if (gpxFilePaths.Count == 1)
+            {
+                baseName = Path.GetFileNameWithoutExtension(gpxFilePaths[0]);
+            }
+            fullBmp.Save(Path.Combine(Path.GetDirectoryName(gpxFilePaths[0]), baseName + zoomLevel.ToString("00") + ".png"));
         }
 
         static int LatToLine(int minTile, int tileHeight, double lat_deg, int zoom)
