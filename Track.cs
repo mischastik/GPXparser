@@ -182,6 +182,12 @@ namespace GPXparser
         public List<Track> SplitAtDistanceJumps(double distanceThreshold)
         {
             List<Track> splitTracks = new List<Track>();
+            if (Waypoints.Count <= 1)
+            {
+                splitTracks.Add(this);
+                return splitTracks;
+            }
+
             Track currentTrack = new Track();
             splitTracks.Add(currentTrack);
             currentTrack.Name = this.Name + "_" + splitTracks.Count;
