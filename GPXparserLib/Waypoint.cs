@@ -83,6 +83,21 @@ namespace GPXparser
             {
                 return new DateTime(Convert.ToInt32(elems[0]), Convert.ToInt32(elems[1]), Convert.ToInt32(elems[2]));
             }
+            if (elems[5].Contains("."))
+            {
+                string[] secElems = elems[5].Split('.');
+                if (secElems[1].Length > 3)
+                {
+                    secElems[1] = secElems[1].Substring(0, 3);
+                }
+                return new DateTime(Convert.ToInt32(elems[0]),
+                    Convert.ToInt32(elems[1]), 
+                    Convert.ToInt32(elems[2]), 
+                    Convert.ToInt32(elems[3]),
+                    Convert.ToInt32(elems[4]),
+                    Convert.ToInt32(secElems[0]),
+                    Convert.ToInt32(secElems[1]));
+            }
             return new DateTime(Convert.ToInt32(elems[0]),
                 Convert.ToInt32(elems[1]), 
                 Convert.ToInt32(elems[2]), 
