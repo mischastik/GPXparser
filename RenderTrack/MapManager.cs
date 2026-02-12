@@ -1,7 +1,8 @@
 using System;
 using System.IO;
-using System.Net;
+using System.Net.Http;
 using System.Drawing;
+
 using GPXparser;
 
 namespace RenderTrack
@@ -16,6 +17,8 @@ namespace RenderTrack
         private double lonIncrement;
         private string cacheDir;
         private string email;
+        private static readonly HttpClient httpClient = new HttpClient();
+
 
         public MapManager(string email, double minLongitude, double maxLongitude, double minLatitude, double maxLatitude, int zoomLevel, string tileCacheDirectory = "")
         {
@@ -35,7 +38,7 @@ namespace RenderTrack
                     {
                         Directory.CreateDirectory(tileCacheDirectory);
                     }
-                } 
+                }
                 catch (Exception)
                 {
                     throw new ArgumentException("Could not create cache directory " + tileCacheDirectory);
@@ -122,7 +125,7 @@ namespace RenderTrack
             }
             // find boundaries
             lonStart = Num2deg(minTile.Item1, minTile.Item2).Item2;
-            double lonStep = Num2deg(minTile.Item1+1, minTile.Item2).Item2 - lonStart;
+            double lonStep = Num2deg(minTile.Item1 + 1, minTile.Item2).Item2 - lonStart;
             lonIncrement = lonStep / tileWidth;
             double[] latBounds = new double[mapHeightInTiles + 1];
 
@@ -155,7 +158,7 @@ namespace RenderTrack
             double tileNum = ((1.0 - Asinh(Math.Tan(lat_rad)) / Math.PI) / 2.0 * n);
             int tileIdx = (int)tileNum;
             line += (tileIdx - minLongitudeLine) * tileHeight;
-            
+
             tileNum -= (int)tileNum;
             line += (int)(tileNum * tileHeight);
             return line;
@@ -173,11 +176,21 @@ namespace RenderTrack
         /// <returns></returns>
         private static Image GetImageFromURL(string url, string email)
         {
-            HttpWebRequest httpWebRequest = (HttpWebRequest)HttpWebRequest.Create(url);
-            httpWebRequest.UserAgent = "Private test program contact " + email;
-            HttpWebResponse httpWebReponse = (HttpWebResponse)httpWebRequest.GetResponse();
-            Stream stream = httpWebReponse.GetResponseStream();
-            return Image.FromStream(stream);
+            using (var request = new HttpRequestMessage(HttpMethod.Get, url))
+            {
+                request.Headers.TryAddWithoutValidation("User-Agent", "Private test program contact " + email);
+                var responseTask = httpClient.SendAsync(request);
+                responseTask.Wait();
+                using (var response = responseTask.Result)
+                {
+                    response.EnsureSuccessStatusCode();
+                    var streamTask = response.Content.ReadAsStreamAsync();
+                    streamTask.Wait();
+                    return Image.FromStream(streamTask.Result);
+                }
+            }
         }
+
+
     }
 }
